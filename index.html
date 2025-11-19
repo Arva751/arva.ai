@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>آروا - چت هوش مصنوعی</title>
+
+  <style>
+    @import url('https://vazirfont.github.io/Vazirmatn/CDN/vazirmatn.min.css');
+    body { font-family: 'Vazirmatn', sans-serif; background:#f9f9f9; padding:20px; }
+    .chat-messages { height:400px; overflow-y:auto; padding:20px; background:#fff; border-radius:10px; }
+    .message { padding:10px 15px; max-width:80%; margin-bottom:15px; border-radius:12px; line-height:1.8; }
+    .user-message { background:#e3f2fd; margin-left:auto; }
+    .ai-message { background:#eee; margin-right:auto; }
+  </style>
+
+</head>
+
+<body>
+
+<h2>آروا — هوش مصنوعی آفلاین</h2>
+
+<div class="chat-messages" id="chat"></div>
+
+<div style="margin-top:20px; display:flex;">
+  <input id="msg" style="flex:1; padding:12px; border-radius:10px; border:1px solid #aaa;" placeholder="بنویس...">
+  <button onclick="sendMessage()" style="padding:12px 20px; margin-right:10px;">ارسال</button>
+</div>
+
+<!-- اتصال WebLLM -->
+<script type="module">
+import { CreateWebWorkerMLCEngine } from "https://esm.run/@mlc-ai/web-llm";
+
+let engine;
+
+function addMessage(text, user=false) {
+    const box = document.getElementById("chat");
+    const msg = document.createElement("div");
+    msg.className = "message " + (user ? "user-message" : "ai-message");
+    msg.textContent = text;
+    box.appendChild(msg);
+    box.scrollTop = box.scrollHeight;
+}
+
+async function loadModel() {
+    addMessage("در حال بارگذاری مدل... ⏳");
+
+    engine = await CreateWebWorkerMLCEngine(
+        new Worker("https://esm.run/@mlc-ai/web-llm/worker?bundle"),
+        "gemma-2b-it-q4f32_1-MLC",
+        {
+            initProgressCallback: (p) => {
+                addMessage("در حال بارگذاری: " + Math.round(p.progress * 100) + "%");
+            }
+        }
+    );
+
+    addMessage("مدل آماده استفاده است! ✔️");
+}
+
+async function sendMessage() {
+    const input = document.getElementById("msg");
+    const text = input.value.trim();
+    if (!text) return;
+
+    addMessage(text, true);
+    input.value = "";
+
+    let botDiv = document.createElement("div");
+    botDiv.className = "message ai-message";
+    document.getElementById("chat").appendChild(botDiv);
+
+    const reply = await engine.chat.completions.create({
+        messages: [{ role: "user", content: text }],
+        stream: true
+    });
+
+    for await (const chunk of reply) {
+        const delta = chunk.choices[0]?.delta?.content;
+        if (delta) botDiv.innerHTML += delta;
+    }
+
+    document.getElementById("chat").scrollTop =
+      document.getElementById("chat").scrollHeight;
+}
+
+window.onload = loadModel;
+</script>
+
+</body>
+</html>
